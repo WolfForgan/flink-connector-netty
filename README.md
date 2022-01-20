@@ -18,7 +18,7 @@ A netty(http) connector as Flink Source which takes https://github.com/apache/ba
 
 Run/Debug Configurations:
 
-![image-20220119174612777](E:\Git\flink-connector-netty\image\image-20220119174612777.png)
+![image-20220119174612777](.\image\image-20220119174612777.png)
 
 Special attention:  
 
