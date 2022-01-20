@@ -1,4 +1,4 @@
-# flink-http-connector
+# flink-connector-netty(http)
 A netty(http) connector as Flink Source which takes https://github.com/apache/bahir-flink/tree/master/flink-connector-netty as a reference and reimplemented in pure JAVA language.
 
 
