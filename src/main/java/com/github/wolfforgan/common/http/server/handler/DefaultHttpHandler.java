@@ -9,8 +9,11 @@ import org.apache.flink.shaded.netty4.io.netty.handler.codec.http.HttpResponseSt
 import java.nio.charset.StandardCharsets;
 
 public final class DefaultHttpHandler extends AbstractHttpHandler {
+    private final SourceCollector<String> collector;
+
     public DefaultHttpHandler(SourceCollector<String> collector, String uri) {
-        super(collector, uri);
+        super(uri);
+        this.collector = collector;
     }
 
     @Override

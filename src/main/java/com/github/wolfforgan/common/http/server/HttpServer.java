@@ -1,7 +1,11 @@
 package com.github.wolfforgan.common.http.server;
 
+import com.alibaba.nacos.api.exception.NacosException;
+import com.alibaba.nacos.api.naming.NamingFactory;
+import com.alibaba.nacos.api.naming.NamingService;
 import com.github.wolfforgan.common.http.server.handler.AbstractHttpHandler;
 import com.github.wolfforgan.common.registry.Registry;
+import com.github.wolfforgan.common.registry.nacos.NacosRegistry;
 import lombok.extern.log4j.Log4j2;
 import org.apache.flink.shaded.netty4.io.netty.bootstrap.ServerBootstrap;
 import org.apache.flink.shaded.netty4.io.netty.buffer.PooledByteBufAllocator;
@@ -42,7 +46,7 @@ public class HttpServer extends RegistrableServer {
                     .option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
                     .childHandler(new ChannelInitializer<SocketChannel>() {
                         @Override
-                        protected void initChannel(SocketChannel ch) throws Exception {
+                        protected void initChannel(SocketChannel ch) {
                             ch.pipeline().addLast(new HttpServerCodec());
                             ch.pipeline().addLast(new HttpObjectAggregator(65535));
                             ch.pipeline().addLast(httpHandler);
@@ -52,7 +56,7 @@ public class HttpServer extends RegistrableServer {
             try {
                 future = bootstrap.bind().sync();
             } catch (Exception e) {
-                log.error("fail to bind", e);
+                log.warn("fail to bind", e);
                 throw new RuntimeException(e);
             }
             log.info("HTTP server listen on port {}", portNotInUse);
@@ -70,6 +74,20 @@ public class HttpServer extends RegistrableServer {
     public void close() {
         workerGroup.shutdownGracefully();
         bossGroup.shutdownGracefully();
+        if (hasRegister.get()) {
+            if (registry instanceof NacosRegistry) {
+                NacosRegistry nacosRegistry = (NacosRegistry) registry;
+                try {
+                    NamingService naming = NamingFactory.createNamingService(nacosRegistry.getProperties());
+                    log.debug("serviceName:{}, clusterName:{}", nacosRegistry.getServiceName(), nacosRegistry.getClusterName());
+                    naming.deregisterInstance(nacosRegistry.getServiceName(), registerIp, registerPort, nacosRegistry.getClusterName());
+                    log.info("deregister successfully, serviceName:{}, ip:{}, port:{}, nacosServer:{}, namespace:{}, clusterName:{}",
+                            nacosRegistry.getServiceName(), registerIp, registerPort, nacosRegistry.getServerAddress(), nacosRegistry.getNamespace(), nacosRegistry.getClusterName());
+                } catch (NacosException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
         log.info("successfully close netty server source");
     }
 }

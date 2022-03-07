@@ -8,9 +8,10 @@ import java.util.Properties;
 
 @EqualsAndHashCode(callSuper = true)
 public class NacosRegistry extends Registry {
-    public NacosRegistry(String serverAddress, String serviceName, String clusterName, String namespace) {
+    public NacosRegistry(String serverAddress, String serviceName, String group, String clusterName, String namespace) {
         super(serverAddress, ServerType.NACOS);
         this.serviceName = serviceName;
+        this.group = group;
         this.clusterName = clusterName;
         this.namespace = namespace;
     }
@@ -26,6 +27,10 @@ public class NacosRegistry extends Registry {
     @Getter
     @Setter
     private String namespace;
+
+    @Getter
+    @Setter
+    private String group;
 
     public Properties getProperties() {
         Properties properties = new Properties();

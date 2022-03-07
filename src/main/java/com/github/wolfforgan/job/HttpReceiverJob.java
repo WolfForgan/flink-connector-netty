@@ -10,8 +10,9 @@ public class HttpReceiverJob {
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
         env.setParallelism(3);   //try 3 instances
-        //Registry registry = RegistryFactory.fromNacos("ip:port", "flink-connector-http", "cluster-name", "namespace-id");
-        DataStream<String> inputStream = env.addSource(new HttpReceiverSource("/flink/source", 1978, null));   //if no need to register, parameter 'registry' could be null
+        String serverName = "flink-connector-http";
+        Registry registry = RegistryFactory.fromNacos("ip:port", serverName, "group-name","cluster-name", "namespace-id");
+        DataStream<String> inputStream = env.addSource(new HttpReceiverSource("/flink/source", 1978, registry, serverName));   //if no need to register, parameter 'registry' could be null
         inputStream.print();
         env.execute("HttpReceiverJob");
     }

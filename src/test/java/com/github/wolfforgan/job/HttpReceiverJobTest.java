@@ -50,7 +50,7 @@ public class HttpReceiverJobTest {
 
     @Test
     public void registerNacos() throws Exception {
-        NacosRegistry registry = RegistryFactory.fromNacos("ip:port", "flink-connector-http", "cluster-name", "namespace-id");
+        NacosRegistry registry = RegistryFactory.fromNacos("ip:port", "flink-connector-http", "group-name","cluster-name", "namespace-id");
         NamingService naming = NamingFactory.createNamingService(registry.getProperties());
         log.debug("serviceName:{}, clusterName:{}", registry.getServiceName(), registry.getClusterName());
         naming.registerInstance(registry.getServiceName(), "local ip", 1978, registry.getClusterName());

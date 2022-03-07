@@ -10,18 +10,20 @@ public final class HttpReceiverSource extends RichParallelSourceFunction<String>
     private final String uri;
     private final int tryPort;
     private final Registry registry;
+    private final String serverName;
     private HttpServer server;
 
-    public HttpReceiverSource(String uri, int tryPort, Registry registry) {
+    public HttpReceiverSource(String uri, int tryPort, Registry registry, String serverName) {
         this.uri = uri;
         this.tryPort = tryPort;
         this.registry = registry;
+        this.serverName = serverName;
     }
 
     @Override
     public void run(SourceContext<String> ctx) throws Exception {
         server = new HttpServer(new DefaultHttpHandler(new HttpBodyCollector(ctx), uri), registry);
-        server.start(tryPort);
+        server.start(tryPort, serverName);
     }
 
     @Override

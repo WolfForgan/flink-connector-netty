@@ -9,7 +9,6 @@ import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
-import org.apache.http.conn.ConnectionKeepAliveStrategy;
 import org.apache.http.conn.DnsResolver;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.LayeredConnectionSocketFactory;
@@ -24,7 +23,6 @@ import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.message.BasicHeaderElementIterator;
 import org.apache.http.pool.PoolStats;
 import org.apache.http.protocol.HTTP;
-import org.apache.http.protocol.HttpContext;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -42,17 +40,15 @@ public class HttpClientHelper {
     private static final int CONNECT_TIMEOUT = 2000;
     private static final int SOCKET_TIMEOUT = 2000;
     private static final int REQUEST_TIMEOUT = 2000;
-    private static final int EXPIRED_CHECK_GAP = 6000;
     private static final int VALIDATE_AFTER_INACTIVITY = 2000;
     private static final int MAX_CONNECTION = 500;
     private static final int MAX_PER_ROUTE = 500;
     private static final int IDLE_CHECK_GAP = 6;
+
     private static PoolingHttpClientConnectionManager
             httpClientConnectionManager;
-    private static CloseableHttpClient pooledHttpClient;
-    private static ScheduledExecutorService monitorExecutor = null;
 
-    public static void createHttpClientConnectionManager()
+    private static void createHttpClientConnectionManager()
     {
         DnsResolver dnsResolver = SystemDefaultDnsResolver.INSTANCE;
         ConnectionSocketFactory plainSocketFactory =
@@ -84,8 +80,7 @@ public class HttpClientHelper {
     private static void startExpiredConnectionsMonitor()
     {
         int idleCheckGap = IDLE_CHECK_GAP;
-        long keepAliveTimeout = KEEP_ALIVE_TIMEOUT;
-        monitorExecutor = Executors.newScheduledThreadPool(1);
+        ScheduledExecutorService monitorExecutor = Executors.newScheduledThreadPool(1);
         monitorExecutor.scheduleAtFixedRate(new TimerTask()
         {
             @Override
@@ -93,7 +88,7 @@ public class HttpClientHelper {
             {
                 httpClientConnectionManager.closeExpiredConnections();
                 httpClientConnectionManager.closeIdleConnections(
-                        keepAliveTimeout, TimeUnit.MILLISECONDS);
+                        KEEP_ALIVE_TIMEOUT, TimeUnit.MILLISECONDS);
                 PoolStats status =
                         httpClientConnectionManager.getTotalStats();
                  /*
@@ -106,16 +101,27 @@ public class HttpClientHelper {
                  log.info(" status.getMax():" + status.getMax());
                  */
             }
-        }, idleCheckGap, idleCheckGap, TimeUnit.MILLISECONDS);
+        }, idleCheckGap, idleCheckGap, TimeUnit.SECONDS);
     }
 
-    public static CloseableHttpClient pooledHttpClient()
-    {
-        if (null != pooledHttpClient)
-        {
-            return pooledHttpClient;
+    public static class ApacheHttpClient {
+        public static CloseableHttpClient getSingleton() {
+            return LazyHolder.CLIENT;
         }
-        createHttpClientConnectionManager();log.info("Apache httpclient pool initialization started");
+    }
+
+    private static class LazyHolder {
+        static {
+            CLIENT = pooledHttpClient();
+        }
+
+        private static final CloseableHttpClient CLIENT;
+    }
+
+    private static CloseableHttpClient pooledHttpClient()
+    {
+        createHttpClientConnectionManager();
+        log.info("Apache httpclient pool initialization started");
         RequestConfig.Builder requestConfigBuilder =
                 RequestConfig.custom();
         requestConfigBuilder.setSocketTimeout(SOCKET_TIMEOUT);
@@ -128,46 +134,40 @@ public class HttpClientHelper {
                 httpClientConnectionManager);
         httpClientBuilder.setDefaultRequestConfig(config);
         httpClientBuilder.setKeepAliveStrategy(
-                new ConnectionKeepAliveStrategy()
-                {
-                    @Override
-                    public long getKeepAliveDuration(
-                            HttpResponse response, HttpContext context)
+                (response, context) -> {
+                    HeaderElementIterator it = new BasicHeaderElementIterator
+                            (response.headerIterator(HTTP.CONN_KEEP_ALIVE));
+                    while (it.hasNext())
                     {
-                        HeaderElementIterator it = new BasicHeaderElementIterator
-                                (response.headerIterator(HTTP.CONN_KEEP_ALIVE));
-                        while (it.hasNext())
+                        HeaderElement he = it.nextElement();
+                        String param = he.getName();
+                        String value = he.getValue();
+                        if (value != null && param.equalsIgnoreCase
+                                ("timeout"))
                         {
-                            HeaderElement he = it.nextElement();
-                            String param = he.getName();
-                            String value = he.getValue();
-                            if (value != null && param.equalsIgnoreCase
-                                    ("timeout"))
+                            try
                             {
-                                try
-                                {
-                                    return Long.parseLong(value) * 1000;
-                                } catch (final NumberFormatException ignore){
-                                }
+                                return Long.parseLong(value) * 1000;
+                            } catch (final NumberFormatException ignore){
                             }
                         }
-                        return KEEP_ALIVE_TIMEOUT;
                     }
+                    return KEEP_ALIVE_TIMEOUT;
                 });
-        pooledHttpClient = httpClientBuilder.build();
-        log.info("Apache httpclient pool initialization finisheded");
+        CloseableHttpClient pooledHttpClient = httpClientBuilder.build();
+        log.info("Apache httpclient pool initialization finished");
         startExpiredConnectionsMonitor();
         return pooledHttpClient;
     }
 
     public static String get(String url) {
-        CloseableHttpClient client = pooledHttpClient();
+        CloseableHttpClient client = ApacheHttpClient.getSingleton();
         HttpGet httpGet = new HttpGet(url);
         return poolRequestData(url, client, httpGet);
     }
 
     public static String post(String url, String content) {
-        CloseableHttpClient client = pooledHttpClient();
+        CloseableHttpClient client = ApacheHttpClient.getSingleton();
         HttpPost httpPost = new HttpPost(url);
         httpPost.setEntity(new ByteArrayEntity(content.getBytes(StandardCharsets.UTF_8), ContentType.APPLICATION_JSON));
         return poolRequestData(url, client, httpPost);
@@ -203,7 +203,7 @@ public class HttpClientHelper {
             try {
                 response.close();
             } catch (IOException e) {
-                log.error(e);
+                log.error("fail to close http response", e);
             }
         }
     }
@@ -213,7 +213,7 @@ public class HttpClientHelper {
             try {
                 in.close();
             } catch (IOException e) {
-                log.error(e);
+                log.error("fail to close input stream", e);
             }
         }
     }
@@ -231,7 +231,7 @@ public class HttpClientHelper {
     private static HttpHost getHost(String url) {
         Pattern p = Pattern.compile("http://[A-Za-z0-9.]+:?\\d*");
         Matcher m = p.matcher(url);
-        while (m.find()) {
+        if (m.find()) {
             String sub = url.substring(m.start(), m.end());
             return HttpHost.create(sub);
         }

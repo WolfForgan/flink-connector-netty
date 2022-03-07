@@ -35,7 +35,7 @@ public class NettyUtil {
         if (startPort != 0 && (startPort < 1024 || startPort > 65536)) {
             throw new RuntimeException("startPort should be between 1024 and 65535 (inclusive), or 0 for a random free port.");
         }
-        String serviceString = serviceName.isEmpty() ? "" : "'" + serviceName + "'";
+        String serviceString = serviceName.isEmpty() ? "'?'" : "'" + serviceName + "'";
         for (int offset = 0; offset <= maxRetries; offset++) {
             // Do not increment port if startPort is 0, which is treated as a special port
             int tryPort = startPort == 0 ? startPort :
@@ -43,7 +43,6 @@ public class NettyUtil {
                     ((startPort + offset - 1024) % (65536 - 1024)) + 1024;
             try {
                 InetSocketAddress result = startService.apply(tryPort);
-                log.info("Successfully started service{}, result:{}", serviceString, result);
             } catch (RuntimeException e) {
                 if (isBindCollision(e)) {
                     if (offset >= maxRetries) {
@@ -59,7 +58,7 @@ public class NettyUtil {
                 } else if (isNacosException(e)) {
                     throw new RuntimeException("fail to register", e.getCause());
                 }
-                log.error("Service {} could not bind on port {}. Attempting port {}.", serviceString, tryPort, tryPort + 1);
+                log.warn("Service {} could not bind on port {}. Attempting port {}.", serviceString, tryPort, tryPort + 1);
             }
         }
         // Should never happen

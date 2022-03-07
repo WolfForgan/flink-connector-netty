@@ -14,11 +14,9 @@ import java.util.Objects;
 public abstract class AbstractHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     public static final AttributeKey<Boolean> KEEP_ALIVE_KEY = AttributeKey.valueOf("KEEP_ALIVE");
     public static final AttributeKey<HttpVersion> HTTP_VERSION_KEY = AttributeKey.valueOf("HTTP_VERSION");
-    protected final SourceCollector<String> collector;
     protected final String uri;
 
-    public AbstractHttpHandler(SourceCollector<String> collector, String uri) {
-        this.collector = collector;
+    public AbstractHttpHandler(String uri) {
         this.uri = uri;
     }
 
@@ -82,7 +80,7 @@ public abstract class AbstractHttpHandler extends SimpleChannelInboundHandler<Fu
     }
 
     private boolean isHTTP_1_0(ChannelHandlerContext ctx) {
-       HttpVersion version = getHttpVersion(ctx);
-       return version.majorVersion() == 1 && version.minorVersion() == 0;
+        HttpVersion version = getHttpVersion(ctx);
+        return version.majorVersion() == 1 && version.minorVersion() == 0;
     }
 }
